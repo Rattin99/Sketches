@@ -1,0 +1,14 @@
+html,
+body {
+  height: 100%;
+  width: 100%;
+  background-color: rgb(152, 152, 156);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.container {
+  display: flex;
+  box-shadow: 20px 20px 20px -5px;
+}
