@@ -1,6 +1,8 @@
+
+
 function setup() {
 
-    canvas = createCanvas(1440, 900);
+    canvas = createCanvas(600, 750);
     canvas.parent("container");
 
     noLoop();
@@ -9,19 +11,15 @@ function setup() {
     
 }
 
-const Color = getColorClass();
-const color = new Color(242, 5, 159, 2.75)
+
 
 
 function draw() {
 
     background(255,255,255);
-
-    // paint(100,100,100,color);
-   
-     her()
-
 }
+
+
 
 
 
