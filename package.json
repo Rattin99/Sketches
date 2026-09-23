@@ -5,7 +5,6 @@
     },
     "name": "sketches",
     "version": "1.0.0",
-    "main": "Fire.js",
     "devDependencies": {
         "vite": "^5.4.10"
     },
