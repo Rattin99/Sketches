@@ -1,4 +1,5 @@
 import p5 from 'p5';
+import { CLIPS, getClip } from '../clips/index.js';
 
 import fire from '../artworks/fire/sketch.js';
 import mouth from '../artworks/mouth/sketch.js';
@@ -34,18 +35,38 @@ const ARTWORKS = [
     { id: 'retro-fx', name: 'Retro FX (image/video → ASCII · dither)', sketch: retroFx },
 ];
 
-function getRequestedId() {
-    return new URLSearchParams(window.location.search).get('artwork');
-}
+const query = new URLSearchParams(window.location.search);
+
+const KIND_LABELS = { time: 'clip', step: 'clip', still: 'still', tool: 'tool', pending: 'sketch' };
 
 function renderGallery(container) {
     container.classList.add('gallery');
-    for (const artwork of ARTWORKS) {
-        const link = document.createElement('a');
-        link.href = `?artwork=${artwork.id}`;
-        link.className = 'gallery-item';
-        link.textContent = artwork.name;
-        container.appendChild(link);
+    for (const clip of CLIPS) {
+        const tile = document.createElement('div');
+        tile.className = 'gallery-item';
+
+        const title = document.createElement('a');
+        title.href = `?artwork=${clip.id}`;
+        title.className = 'gallery-title';
+        title.textContent = clip.name;
+
+        const badge = document.createElement('span');
+        badge.className = `badge badge-${clip.kind}`;
+        badge.textContent = KIND_LABELS[clip.kind];
+
+        const desc = document.createElement('p');
+        desc.className = 'gallery-desc';
+        desc.textContent = clip.description;
+
+        tile.append(title, badge, desc);
+        if (clip.runnable) {
+            const play = document.createElement('a');
+            play.href = `?clip=${clip.id}`;
+            play.className = 'gallery-clip';
+            play.textContent = 'Open clip →';
+            tile.append(play);
+        }
+        container.appendChild(tile);
     }
 }
 
@@ -60,9 +81,13 @@ function renderArtwork(container, artwork) {
 }
 
 const container = document.getElementById('container');
-const requested = ARTWORKS.find((a) => a.id === getRequestedId());
+const requested = ARTWORKS.find((a) => a.id === query.get('artwork'));
 
-if (requested) {
+if (query.has('verify')) {
+    import('../clips/verify.js').then((m) => m.runVerify(container));
+} else if (query.has('clip')) {
+    import('../clips/player.js').then((m) => m.renderPlayer(container, getClip(query.get('clip'))));
+} else if (requested) {
     renderArtwork(container, requested);
 } else {
     renderGallery(container);
