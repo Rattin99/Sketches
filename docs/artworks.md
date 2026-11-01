@@ -97,6 +97,12 @@ One wobbly black hand-drawn circle with a random radius (1–150) and 100 px wob
 
 This one is a tool, not a single artwork. Upload a photo or video and it's redrawn as pen-plotter ink (cross-hatching, parallel hatching or wave lines), with export to PNG, SVG and MP4. Full documentation: **[plotter.md](plotter.md)**.
 
+## Physarum (slime mould in paint)
+
+`physarum` · 1920×1080 · uses `tools/retro/gl.js` · **animated**
+
+A network of veins grows across a sheet of paper, drawn by a million agents in mixing paint (Kubelka-Munk, so yellow and blue make green), then a colour wave runs back along the veins. Press `R` for a new seed, `P` for the next palette, `S` to save, `Space` to pause. The same piece is a clip (`?clip=physarum`) that uses the CPU engine. Full documentation: **[physarum.md](physarum.md)**.
+
 ## Retro FX (image/video → ASCII · dither)
 
 `retro-fx` · output-sized · uses `tools/retro/` · **animated**

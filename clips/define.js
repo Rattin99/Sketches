@@ -52,5 +52,6 @@ export function defineClip(def) {
         setup: def.setup ?? (() => ({})),
         frame: def.frame,
         step: def.step,
+        render: def.render, // optional, step kind: draws the frame once after the last tick of a renderFrame
     };
 }

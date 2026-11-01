@@ -16,6 +16,7 @@ import ngonDemo from '../artworks/ngon-demo/sketch.js';
 import daisys from '../artworks/daisys/sketch.js';
 import plotter from '../artworks/plotter/sketch.js';
 import retroFx from '../artworks/retro-fx/sketch.js';
+import physarum from '../artworks/physarum/sketch.js';
 
 const ARTWORKS = [
     { id: 'fire', name: 'Fire', sketch: fire },
@@ -33,6 +34,7 @@ const ARTWORKS = [
     { id: 'daisys', name: 'Daisys', sketch: daisys },
     { id: 'plotter', name: 'Plotter (image/video → ink)', sketch: plotter },
     { id: 'retro-fx', name: 'Retro FX (image/video → ASCII · dither)', sketch: retroFx },
+    { id: 'physarum', name: 'Physarum', sketch: physarum },
 ];
 
 const query = new URLSearchParams(window.location.search);

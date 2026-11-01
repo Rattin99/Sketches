@@ -21,10 +21,11 @@ function compile(gl, type, src) {
 }
 
 export class Program {
-    constructor(gl, fragSrc) {
+    // vertSrc is optional: omit it for the fullscreen triangle.
+    constructor(gl, fragSrc, vertSrc = FULLSCREEN_VS) {
         this.gl = gl;
         const prog = gl.createProgram();
-        gl.attachShader(prog, compile(gl, gl.VERTEX_SHADER, FULLSCREEN_VS));
+        gl.attachShader(prog, compile(gl, gl.VERTEX_SHADER, vertSrc));
         gl.attachShader(prog, compile(gl, gl.FRAGMENT_SHADER, fragSrc));
         gl.linkProgram(prog);
         if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
@@ -85,6 +86,12 @@ export function createTexture(gl, { w = 1, h = 1, filter = 'linear', wrap = 'cla
         gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, w, h, 0, gl.RED, gl.UNSIGNED_BYTE, data);
         gl.pixelStorei(gl.UNPACK_ALIGNMENT, 4);
+    } else if (format === 'rgba16f') {
+        // Half floats can be sampled with linear filtering. Rendering to them needs EXT_color_buffer_float.
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, w, h, 0, gl.RGBA, gl.HALF_FLOAT, data);
+    } else if (format === 'rgba32f') {
+        // Rendering needs EXT_color_buffer_float. Linear filtering needs OES_texture_float_linear, so prefer 'nearest'.
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, w, h, 0, gl.RGBA, gl.FLOAT, data);
     } else {
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, data);
     }
@@ -93,8 +100,9 @@ export function createTexture(gl, { w = 1, h = 1, filter = 'linear', wrap = 'cla
 
 // A color texture plus framebuffer, resized lazily.
 export class Target {
-    constructor(gl, { mips = false, filter = 'linear' } = {}) {
+    constructor(gl, { mips = false, filter = 'linear', format = 'rgba8' } = {}) {
         this.gl = gl;
+        this.format = format;
         this.mips = mips;
         this.filter = filter;
         this.w = 0;
@@ -107,7 +115,7 @@ export class Target {
         if (w === this.w && h === this.h && this.tex) return this;
         const gl = this.gl;
         if (this.tex) gl.deleteTexture(this.tex);
-        this.tex = createTexture(gl, { w, h, filter: this.filter, mips: this.mips });
+        this.tex = createTexture(gl, { w, h, filter: this.filter, mips: this.mips, format: this.format });
         gl.bindFramebuffer(gl.FRAMEBUFFER, this.fbo);
         gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this.tex, 0);
         gl.bindFramebuffer(gl.FRAMEBUFFER, null);

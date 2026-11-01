@@ -41,6 +41,7 @@ export function createClipRunner(clip, host, options = {}) {
                     fps,
                     t,
                     duration,
+                    revealSeconds,
                     totalFrames,
                     phase: ((frame / totalFrames) * cycles) % 1,
                     reveal: clamp01(t / revealSeconds),
@@ -102,7 +103,10 @@ export function createClipRunner(clip, host, options = {}) {
                                 return;
                             }
                             if (f < cursor) reset();
+                            const moved = cursor < f;
                             while (cursor < f) draw(clip.step, timeFor(++cursor));
+                            // Optional: compose once per renderFrame instead of on every replayed tick.
+                            if (moved && clip.render) draw(clip.render, timeFor(cursor));
                         },
                         destroy() {
                             p.remove();

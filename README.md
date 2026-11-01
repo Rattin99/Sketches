@@ -37,6 +37,7 @@ Everything lives in [`docs/`](docs/README.md):
 - [Tools reference](docs/tools.md) documents the shared helpers in `tools/`.
 - [Artworks catalogue](docs/artworks.md) describes what each sketch does and how.
 - [Plotter](docs/plotter.md) covers the image/video → ink tool: usage, the algorithm, parameters, export, and the Remotion port.
+- [Physarum](docs/physarum.md) covers the slime-mould piece: how it works, the CPU and GPU engines, palettes, tuning and render cost.
 - [Retro FX](docs/retro-fx.md) covers the image/video → ASCII / dither tool: usage, the rendering pipeline, motion and seamless loops, every parameter, export, and using the engine from other sketches.
 
 ## Layout

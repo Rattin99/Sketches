@@ -28,6 +28,7 @@ Simulations and paint that build up on the canvas. Runnable.
 | Her | `her` | Grid of layered translucent paint blobs bleeding into watercolour. | **bleed**: Paint builds up layer by layer, then holds.<br>**smear**: Blob centres creep while painting, leaving trails. | paint, color | `?artwork=her`<br>`?clip=her` |
 | Arima | `arima` | Large overlapping paint blobs fusing into one dense glowing field. | **bleed**: Paint builds up layer by layer, then holds.<br>**smear**: Blob centres creep while painting, leaving trails. | paint, color | `?artwork=arima`<br>`?clip=arima` |
 | Walker | `walker` | Random walkers sketching warm-palette curves. | **trails**: Lines accumulate forever.<br>**fade**: Old trail fades out; works over transparency. | lines, simulation | `?artwork=walker`<br>`?clip=walker` |
+| Physarum | `physarum` | A slime-mould network grows across paper in mixing paint, then a colour wave runs back along it. | **bloom**: One source grows outward, then one wave.<br>**colonies**: Two sources in two inks grow until they meet, then one wave.<br>**veins**: A fully grown network with a colour wave that loops. | simulation, paint, organic | `?artwork=physarum`<br>`?clip=physarum` |
 
 ## Stills
 

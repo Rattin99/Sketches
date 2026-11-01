@@ -6,7 +6,7 @@
 
 - **p5.js 1.x** in [instance mode](https://github.com/processing/p5.js/wiki/Global-and-instance-mode). Every sketch receives a `p` object instead of using globals, so many sketches can live in one bundle without clashing.
 - **Vite 5** dev server / bundler (`npm run dev`, `npm run build`, `npm run preview`).
-- **WebGL2** (no library) renders Retro FX. See `tools/retro/gl.js`.
+- **WebGL2** (no library) renders Retro FX and the live Physarum sketch. See `tools/retro/gl.js`.
 - **mp4-muxer** is used only by the tools' MP4 export (`tools/video-export.js`).
 - Plain ES modules everywhere, with no framework. `package.json` sets `"type": "module"`, so Node scripts such as `scripts/build-index.mjs` can import `clips/index.js` directly.
 - The package `exports` map exposes `./clips`, `./clips/runtime`, `./clips/retro`, `./retro` and `./retro-presets`. Other repos (collage-video-engine) import clips and the Retro engine through it. See [clips.md](clips.md#using-clips-in-remotion).

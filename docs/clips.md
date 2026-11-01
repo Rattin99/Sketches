@@ -87,6 +87,8 @@ Each param needs a `default`. The type comes from the spec:
 | `still` | Too minimal to be a useful clip. Index entry only | nothing | Not runnable |
 | `tool` | Plotter and Retro FX. Index entry only | nothing | Not runnable. See their own docs |
 
+A `step` clip may also define `render(ctx, state, time)`. The runner calls it once after the last tick of a `renderFrame` (and only if ticks ran), instead of the clip composing on every replayed tick. Use it when composing a frame is much more expensive than a tick, as in `physarum`.
+
 `still` and `tool` clips have only `id`, `name`, `description`, `tags`, `kind`. `tool` clips also set `docs` (a path such as `plotter.md`).
 
 ### `ctx`
@@ -114,6 +116,7 @@ Colours that assume a dark or light backdrop should be params, so a clip stays v
 | `duration` | Clip length in seconds |
 | `totalFrames` | `Math.round(duration * fps)` |
 | `phase` | `(frame / totalFrames * cycles) % 1`. Use it for looping motion |
+| `revealSeconds` | Seconds the reveal takes (the runner's `revealSeconds` option, default `0.8 * duration`). Clips can use it to time what follows the reveal. Older runners may not supply it, so fall back to `0.8 * time.duration` |
 | `reveal` | `clamp01(t / revealSeconds)`. Use it for draw-on motion. It holds at 1 afterwards |
 | `boilStep` | `Math.floor(t * boilRate)` when the mode has `boil`, otherwise `0` |
 
@@ -176,6 +179,8 @@ Modes and flags below match each `artworks/<id>/clip.js`. The generated table wi
 | `arima` | step | `bleed` (reveal), `smear` (reveal) | Dense. Same technique as `her` with blobs of `400 * unit` |
 | `fire` | step | `burn`, `ember` | Dense. Grid `W / (10 * unit)` by `H / (18 * unit)`. Flames rise from the bottom edge. Params: `ink` (used by `ember`), `height`. Background black |
 | `walker` | step | `trails`, `fade` | Walker count scales with area. Step lengths scaled by `unit`. `fade` works when transparent via `p.erase`. Params: `palette`, `weight`, `stride`, `speed`, `fade`. Default duration 8 s |
+
+| `physarum` | step | `bloom` (reveal), `colonies` (reveal), `veins` (loops) | Slime-mould network in mixing paint on paper, then a colour wave. CPU engine, 1500 ticks to grow, so a late frame replays them all (about 57 ms a tick at 1080p). Uses `render`. Params: `palette`, `inkStrength`, `agentScale`, `pencil`. Default duration 20 s. See [physarum.md](physarum.md) |
 
 Index-only: `dekhi`, `ngon-demo`, `daisys` (`still`), `plotter`, `retro-fx` (`tool`).
 

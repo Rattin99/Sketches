@@ -14,10 +14,11 @@ import ngonDemo from '../artworks/ngon-demo/clip.js';
 import daisys from '../artworks/daisys/clip.js';
 import plotter from '../artworks/plotter/clip.js';
 import retroFx from '../artworks/retro-fx/clip.js';
+import physarum from '../artworks/physarum/clip.js';
 
 export const CLIPS = [
     fire, mouth, spacetime, recursiveSquares, samsara, her, arima, dekhi,
-    tarkata, mesh, walker, ngonDemo, daisys, plotter, retroFx,
+    tarkata, mesh, walker, ngonDemo, daisys, plotter, retroFx, physarum,
 ];
 
 export const getClip = (id) => CLIPS.find((c) => c.id === id);
