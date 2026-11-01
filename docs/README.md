@@ -10,6 +10,8 @@ This is the index for everything in the repo. Each entry links to its detailed p
 | [Tools reference](tools.md) | API of every shared helper in `tools/` |
 | [Artworks catalogue](artworks.md) | What each sketch draws, the technique behind it, and the knobs worth tweaking |
 | [Plotter](plotter.md) | The image/video → pen-plotter ink tool: UI, algorithm, every parameter, exports, and the Remotion port |
+| [Clip library](clips.md) | Sketches as frame-addressable video clips: the `clip.js` format, determinism rules, the `?clip` player, `?verify`, and using clips in Remotion |
+| [Sketch index](sketches.md) | Generated list of every sketch with its kind, modes and links. Rebuild with `npm run index` |
 | [Retro FX](retro-fx.md) | The image/video → animated ASCII / dithering tool: UI, rendering pipeline, motion and seamless loops, every parameter, exports, and the reusable engine |
 
 ## Artwork index
@@ -51,4 +53,5 @@ There's also one extra page outside the gallery: `artworks/fire/fire-ascii.html`
 
 ## Related repos
 
-- **collage-video-engine** (Remotion) keeps a TypeScript port of `tools/hatching.js` in `src/effects/plotter/`, exposed as `<PlotterImage>`, `<PlotterVideo>` and the `plotter-clip` composition. See [Plotter → Remotion](plotter.md#using-it-in-remotion-collage-video-engine).
+- **collage-video-engine** (Remotion) uses this repo through a `file:../Sketches` dependency. `<SketchClip>` and `<RetroLayer>` run the clips and the Retro FX engine from here. See [Clip library → Remotion](clips.md#using-clips-in-remotion).
+- The same repo keeps a TypeScript port of `tools/hatching.js` in `src/effects/plotter/`, exposed as `<PlotterImage>`, `<PlotterVideo>` and the `plotter-clip` composition. See [Plotter → Remotion](plotter.md#using-it-in-remotion-collage-video-engine).

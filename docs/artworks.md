@@ -4,6 +4,8 @@
 
 Each artwork lives in `artworks/<id>/sketch.js` and opens at `?artwork=<id>`. Unless noted, sketches draw one still frame (`noLoop`). Press `R` for a new random variation and `S` to save a PNG.
 
+Animated versions of these sketches live in `artworks/<id>/clip.js`. See [clips.md](clips.md).
+
 ---
 
 ## Fire
