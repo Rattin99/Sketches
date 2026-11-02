@@ -1,22 +1,19 @@
 // GPU physarum engine (WebGL2): the live sketch's engine, with the same API as cpu/engine.js.
-// It runs the CPU engine's passes in the same order, with the agents as a texture instead of typed arrays:
-//   1-5 respawn, sense, steer, move, adopt (one shader)   6 deposit (trail, then ink)   7 diffuse
+// It runs the CPU engine's passes in the same order, with the agents as textures instead of typed arrays:
+//   wake (a count, here)   sense + steer + move (one shader)   deposit (trail, then hair)   diffuse   wash
+// The rules and the composition are shared with the CPU engine; the runs are not pixel-identical, because the GPU has
+// more agents, its own random numbers, and deposits all agents' trails at once instead of one after another.
 // Needs EXT_color_buffer_float. Use GpuEngine.isSupported() first and fall back to CpuEngine when it is false.
 //
 // More agents than the CPU engine means each one deposits less: deposits are scaled by
 // (agents the CPU engine would use) / (agents here), so the look matches the tuning in look.js.
-import { mulberry32 } from '../../../tools/hatching.js';
 import { Program, createTexture } from '../../../tools/retro/gl.js';
 import { LOOK } from '../look.js';
 import { PALETTES, DEFAULT_PALETTE } from '../palettes.js';
-import { buildMap, activeShare } from '../map.js';
-import { bakeGuide } from '../guide.js';
-import { pigmentTable, waveFront } from '../pigment.js';
-import { drawSheet, makeGrain } from '../sheet.js';
+import { buildColony, simGeometry, cpuAgentCount, anchorPoints, waveFront } from '../colony.js';
+import { bakeRoughness } from '../rough.js';
+import { drawSheet, makeGrain, hexToRgb } from '../sheet.js';
 import * as GLSL from './shaders.js';
-
-const clamp01 = (x) => (x < 0 ? 0 : x > 1 ? 1 : x);
-const EMITTER_ROW = 256; // texels per row of the emitter and droplet textures (the shaders assume this)
 
 export class GpuEngine {
     /** True when float render targets exist. Probes a throwaway canvas, because a canvas keeps its first context type. */
@@ -25,46 +22,37 @@ export class GpuEngine {
         return !!gl?.getExtension('EXT_color_buffer_float');
     }
 
-    constructor({ canvas, W, H, seed, mode = 'bloom', palette = DEFAULT_PALETTE, inkStrength = 1, agentScale = 1, pencil = true, transparent = false, agentSide = 1024 }) {
+    constructor({ canvas, W, H, seed, mode = 'bloom', palette = DEFAULT_PALETTE, inkStrength = 1, agentScale = 1, pencil = true, transparent = false, agentSide = 1024, spread, evenness }) {
         const gl = canvas.getContext('webgl2', { antialias: false, alpha: true, premultipliedAlpha: true, preserveDrawingBuffer: true });
         if (!gl || !gl.getExtension('EXT_color_buffer_float')) throw new Error('WebGL2 float render targets are not available');
         this.gl = gl;
         this.info = { renderer: this.readRenderer(), agents: agentSide * agentSide };
-        // The trail and ink are added to with blending. 32-bit needs EXT_float_blend. Without it, 16-bit is used, which
-        // quantises the trail enough to weaken the steering and the ink at high density.
+        // The trail and hair are added to with blending. 32-bit needs EXT_float_blend. Without it, 16-bit is used, which
+        // quantises thin hairs and the trail. The wash is not blended (it is read and rewritten), so it is always 32-bit.
         this.floatFormat = gl.getExtension('EXT_float_blend') ? 'rgba32f' : 'rgba16f';
         this.canvas = canvas;
         this.W = W;
         this.H = H;
         canvas.width = W;
         canvas.height = H;
-        this.unit = Math.min(W, H) / 1080;
         this.transparent = transparent;
         this.inkStrength = inkStrength;
         this.palette = typeof palette === 'string' ? PALETTES[palette] ?? PALETTES[DEFAULT_PALETTE] : palette;
-        this.table = pigmentTable(this.palette);
-
-        this.map = buildMap(seed, W, H, mode, this.palette.inks.length);
-        this.gridW = Math.ceil(W / (LOOK.trail.cellSize * this.unit));
-        this.gridH = Math.ceil(H / (LOOK.trail.cellSize * this.unit));
-        this.guide = bakeGuide(this.map, this.gridW, this.gridH);
-        this.grain = makeGrain(seed ^ 0x6a09, W, H, this.unit);
+        this.inkCount = this.palette.inks.length;
+        Object.assign(this, simGeometry(W, H));
 
         this.side = agentSide;
         this.count = agentSide * agentSide;
-        const cpuCount = LOOK.agents.baseCount * ((W * H) / (1920 * 1080)) * agentScale;
-        this.depositRatio = cpuCount / this.count;
-        this.progress = 0;
-        this.tickCount = 0;
+        this.depositRatio = cpuAgentCount(W, H, agentScale) / this.count;
         this.seed = seed;
-        this.nextDroplet = 0;
-        this.unlockedEmitters = 0;
+        // Pens stay as few and as bold as the CPU engine's: spreading the same ink over more pens would lose the hairs.
+        this.colony = buildColony(seed, W, H, mode, this.inkCount, this.count, { penShare: LOOK.pens.share * this.depositRatio, spread, evenness });
         this.active = 0;
+        this.tickCount = 0;
 
         this.buildPrograms();
         this.uploadStatic(seed, pencil);
-        this.buildTargets(seed, agentScale);
-        this.setGrowth(0);
+        this.buildTargets();
     }
 
     readRenderer() {
@@ -77,44 +65,40 @@ export class GpuEngine {
         this.programs = {
             update: new Program(gl, GLSL.UPDATE_FS),
             trailDeposit: new Program(gl, GLSL.TRAIL_DEPOSIT_FS, GLSL.TRAIL_DEPOSIT_VS),
-            inkDeposit: new Program(gl, GLSL.INK_DEPOSIT_FS, GLSL.INK_DEPOSIT_VS),
-            droplets: new Program(gl, GLSL.DROPLET_FS, GLSL.DROPLET_VS),
+            hairDeposit: new Program(gl, GLSL.HAIR_DEPOSIT_FS, GLSL.HAIR_DEPOSIT_VS),
             diffuse: new Program(gl, GLSL.DIFFUSE_FS),
+            wash: new Program(gl, GLSL.WASH_FS),
+            fade: new Program(gl, GLSL.FADE_FS),
             compose: new Program(gl, GLSL.COMPOSE_FS),
         };
         this.emptyVao = gl.createVertexArray(); // every pass reads its input from textures, so no vertex buffers
         gl.bindVertexArray(this.emptyVao);
     }
 
-    /** Textures that never change after construction: guide, emitters, droplets, paper, grain. */
+    /** Textures that never change after construction: colony grids, rough-edge table, paper. */
     uploadStatic(seed, pencil) {
         const gl = this.gl;
-        const { strength, arrive, pigment, radius } = this.guide;
-        const guide = new Float32Array(strength.length * 4);
-        for (let k = 0; k < strength.length; k++) guide.set([strength[k], arrive[k], pigment[k], radius[k]], k * 4);
-        this.guideTex = createTexture(gl, { w: this.gridW, h: this.gridH, filter: 'nearest', format: 'rgba32f', data: guide });
+        const { gridW, gridH, W, H } = this;
+        const { reach, inkMap, inkBlend, edgeMask, tone, wet, flowX, flowY } = this.colony;
+        const grids = new Float32Array(gridW * gridH * 4);
+        for (let k = 0; k < reach.length; k++) grids.set([reach[k], inkMap[k], inkBlend[k], edgeMask[k]], k * 4);
+        this.colonyTex = createTexture(gl, { w: gridW, h: gridH, filter: 'nearest', format: 'rgba32f', data: grids });
+        const fields = new Float32Array(gridW * gridH * 4);
+        for (let k = 0; k < tone.length; k++) fields.set([tone[k], wet[k], flowX[k], flowY[k]], k * 4);
+        this.fieldsTex = createTexture(gl, { w: gridW, h: gridH, filter: 'nearest', format: 'rgba32f', data: fields });
 
-        const e = this.map.emitters;
-        const emitters = new Float32Array(Math.ceil(e.count / EMITTER_ROW) * EMITTER_ROW * 4);
-        for (let i = 0; i < e.count; i++) emitters.set([e.x[i], e.y[i], e.arrive[i], e.pigment[i]], i * 4);
-        this.emitterTex = createTexture(gl, { w: EMITTER_ROW, h: emitters.length / 4 / EMITTER_ROW, filter: 'nearest', format: 'rgba32f', data: emitters });
+        const rough = bakeRoughness(W, H, seed);
+        this.grain = makeGrain(seed ^ 0x6a09, W, H, Math.max(W, H) / 1920);
+        const table = new Float32Array(W * H * 4);
+        for (let k = 0; k < rough.length; k++) table.set([rough[k] % W, Math.floor(rough[k] / W), this.grain[k], 0], k * 4);
+        this.roughTex = createTexture(gl, { w: W, h: H, filter: 'nearest', format: 'rgba32f', data: table });
 
-        const drops = this.map.droplets;
-        const dropData = new Float32Array(Math.max(1, Math.ceil(drops.length / EMITTER_ROW)) * EMITTER_ROW * 4);
-        drops.forEach((d, i) => dropData.set([d.x, d.y, d.radius, d.pigment], i * 4));
-        this.dropletTex = createTexture(gl, { w: EMITTER_ROW, h: dropData.length / 4 / EMITTER_ROW, filter: 'nearest', format: 'rgba32f', data: dropData });
+        const paper = this.transparent ? new Uint8Array(W * H * 4) : this.paintSheet(seed, pencil);
+        this.paperTex = createTexture(gl, { w: W, h: H, filter: 'nearest', format: 'rgba8', data: paper });
 
-        const grain = new Uint8Array(this.W * this.H);
-        for (let i = 0; i < grain.length; i++) grain[i] = Math.round(this.grain[i] * 255);
-        this.grainTex = createTexture(gl, { w: this.W, h: this.H, filter: 'nearest', format: 'r8', data: grain });
-
-        const paper = this.transparent ? new Uint8Array(this.W * this.H * 4) : this.paintSheet(seed, pencil);
-        this.paperTex = createTexture(gl, { w: this.W, h: this.H, filter: 'nearest', format: 'rgba8', data: paper });
-
-        // K/S per pigment as a flat vec3 array: inks (padded to four), then the wave ink in slot 4.
-        this.ks = new Float32Array(15);
-        for (let p = 0; p < 4; p++) if (p < this.table.count) this.ks.set(this.table.ks[p], p * 3);
-        this.ks.set(this.table.ks[this.table.count], 12);
+        this.inkRgb = new Float32Array(12); // four inks as a flat vec3 array, padded
+        this.palette.inks.slice(0, 4).forEach((hex, n) => this.inkRgb.set(hexToRgb(hex), n * 3));
+        this.waveRgb = hexToRgb(this.palette.wave);
     }
 
     paintSheet(seed, pencil) {
@@ -122,23 +106,19 @@ export class GpuEngine {
         canvas.width = this.W;
         canvas.height = this.H;
         const g = canvas.getContext('2d', { willReadFrequently: true });
-        drawSheet(g, this.W, this.H, this.map, this.palette, seed, this.grain, { pencil });
+        drawSheet(g, this.W, this.H, anchorPoints(this.colony, seed, this.W, this.H), this.palette, seed, this.grain, { pencil });
         return new Uint8Array(g.getImageData(0, 0, this.W, this.H).data.buffer);
     }
 
-    /** Agent state ping-pong (two textures each, written together), the trail, and the ink. */
-    buildTargets(seed, agentScale) {
+    /** Agent state ping-pong (two textures each, written together), the trail, the wash and the hair. */
+    buildTargets() {
         const gl = this.gl;
-        const A = LOOK.agents;
-        const I = LOOK.ink;
-        const rng = mulberry32((seed ^ 0x9e3779b9) >>> 0);
-        const stateA = new Float32Array(this.count * 4); // x, y, heading, life: all dead to start
-        const stateB = new Float32Array(this.count * 4); // pigment, lane, isStray, unused
-        for (let i = 0; i < this.count; i++) {
-            // Lanes are snapped to a few fixed values (plus a little scatter), as in the CPU engine.
-            const lane = (Math.floor(rng() * I.laneCount) + 0.5) / I.laneCount;
-            stateB[i * 4 + 1] = (lane + (rng() - 0.5) * (I.laneScatter / I.laneCount)) * 2 - 1;
-            stateB[i * 4 + 2] = rng() < A.strayShare ? 1 : 0;
+        const { colony, count } = this;
+        const stateA = new Float32Array(count * 4); // x, y, heading, penAge
+        const stateB = new Float32Array(count * 4); // ink, kind, sensorScale, penLife
+        for (let i = 0; i < count; i++) {
+            stateA.set([colony.x[i], colony.y[i], colony.heading[i], colony.penAge[i]], i * 4);
+            stateB.set([colony.ink[i], colony.kind[i], colony.sensorScale[i], colony.penLife[i]], i * 4);
         }
         this.agentSets = [0, 1].map((n) => {
             const a = createTexture(gl, { w: this.side, h: this.side, filter: 'nearest', format: 'rgba32f', data: n === 0 ? stateA : null });
@@ -147,15 +127,20 @@ export class GpuEngine {
         });
         this.agentRead = 0;
 
-        const makeTrail = () => {
-            const tex = createTexture(gl, { w: this.gridW, h: this.gridH, filter: 'nearest', format: this.floatFormat });
+        const makeTarget = (w, h, format) => {
+            const tex = createTexture(gl, { w, h, filter: 'nearest', format });
             return { tex, fbo: this.makeFramebuffer([tex]) };
         };
-        this.trail = makeTrail();
-        this.trailScratch = makeTrail();
-        const inkTex = createTexture(gl, { w: this.W, h: this.H, filter: 'nearest', format: this.floatFormat });
-        this.ink = { tex: inkTex, fbo: this.makeFramebuffer([inkTex]) };
-        this.clearTargets();
+        this.trail = makeTarget(this.gridW, this.gridH, this.floatFormat);
+        this.trailScratch = makeTarget(this.gridW, this.gridH, this.floatFormat);
+        this.washSets = [makeTarget(this.gridW, this.gridH, 'rgba32f'), makeTarget(this.gridW, this.gridH, 'rgba32f')];
+        this.washRead = 0;
+        this.hair = makeTarget(this.W, this.H, this.floatFormat);
+        for (const { fbo } of [this.trail, this.trailScratch, ...this.washSets, this.hair]) {
+            gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+            gl.clearColor(0, 0, 0, 0);
+            gl.clear(gl.COLOR_BUFFER_BIT);
+        }
     }
 
     makeFramebuffer(textures) {
@@ -167,47 +152,6 @@ export class GpuEngine {
         if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) throw new Error('Framebuffer incomplete');
         gl.bindFramebuffer(gl.FRAMEBUFFER, null);
         return fbo;
-    }
-
-    clearTargets() {
-        const gl = this.gl;
-        for (const { fbo } of [this.trail, this.trailScratch, this.ink]) {
-            gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
-            gl.clearColor(0, 0, 0, 0);
-            gl.clear(gl.COLOR_BUFFER_BIT);
-        }
-    }
-
-    /** Unlocks the map up to `progress` (0..1), exactly as the CPU engine does. */
-    setGrowth(progress) {
-        this.progress = clamp01(progress);
-        const soft = LOOK.growth.frontSoftness;
-        this.front = this.progress * (1 + soft);
-        const emitters = this.map.emitters;
-        let low = 0;
-        let high = emitters.count;
-        while (low < high) {
-            const mid = (low + high) >> 1;
-            if (emitters.arrive[mid] <= this.front) low = mid + 1;
-            else high = mid;
-        }
-        this.unlockedEmitters = low;
-        this.stampDroplets();
-        this.active = Math.floor(this.count * activeShare(this.unlockedEmitters, emitters.count));
-    }
-
-    /** Draws the droplets that growth has reached since the last call, as soft dots into the ink. */
-    stampDroplets() {
-        const drops = this.map.droplets;
-        let last = this.nextDroplet;
-        while (last < drops.length && drops[last].arrive <= this.front) last++;
-        if (last === this.nextDroplet) return;
-        const gl = this.gl;
-        this.bindTarget(this.ink.fbo, this.W, this.H);
-        this.additive(true);
-        this.programs.droplets.use().set({ uDroplets: { tex: this.dropletTex }, uFirst: { int: this.nextDroplet }, uSize: [this.W, this.H], uDropletDeposit: LOOK.ink.dropletDeposit });
-        gl.drawArrays(gl.POINTS, 0, last - this.nextDroplet);
-        this.nextDroplet = last;
     }
 
     bindTarget(fbo, w, h) {
@@ -227,88 +171,120 @@ export class GpuEngine {
 
     /** One simulation tick. */
     tick() {
+        this.wake();
         this.moveAgents();
         this.depositTrail();
-        this.depositInk();
-        this.diffuseTrail();
+        this.depositHair();
+        this.diffuse();
+        this.washTrail(this.tickCount % LOOK.ink.moveEvery === 0);
         this.tickCount++;
     }
 
-    /** Passes 1 to 5 in one shader, writing the next agent state into the other texture pair. */
+    /** Wake: agents whose wake tick has come join in. They are sorted, so this is a moving count. */
+    wake() {
+        const { wake } = this.colony;
+        while (this.active < this.count && wake[this.active] <= this.tickCount) this.active++;
+    }
+
+    /** Sense, steer and move in one shader, writing the next agent state into the other texture pair. */
     moveAgents() {
         const gl = this.gl;
-        const A = LOOK.agents;
+        const S = LOOK.sim;
+        const P = LOOK.pens;
         const read = this.agentSets[this.agentRead];
         const write = this.agentSets[1 - this.agentRead];
         this.additive(false);
         this.bindTarget(write.fbo, this.side, this.side);
         this.programs.update.use().set({
-            uStateA: { tex: read.a }, uStateB: { tex: read.b }, uTrail: { tex: this.trail.tex }, uGuide: { tex: this.guideTex }, uEmitters: { tex: this.emitterTex },
-            uSide: { int: this.side }, uActive: { int: this.active }, uUnlocked: { int: this.unlockedEmitters }, uSeed: { int: (Math.imul(this.tickCount + 1, 0x9e3779b1) ^ this.seed) | 0 },
-            uSize: [this.W, this.H], uGrid: [this.gridW, this.gridH], uFront: this.front, uSoft: LOOK.growth.frontSoftness, uUnit: this.unit,
-            uSpeed: A.speed * this.unit, uSensorDistance: A.sensorDistance * this.unit, uCosSensor: Math.cos(A.sensorAngle), uSinSensor: Math.sin(A.sensorAngle),
-            uTurnAngle: A.turnAngle, uJitter: A.jitter, uGuideGain: A.guideGain, uStrayGain: A.guideGain * A.strayGuide,
-            uAdoptChance: A.adoptChance, uSpawnBias: A.spawnBias, uSpawnJitter: A.spawnJitter, uLife: A.life, uStrayLife: A.strayLife,
+            uStateA: { tex: read.a }, uStateB: { tex: read.b }, uTrail: { tex: this.trail.tex },
+            uWall: S.wall, uSide: { int: this.side }, uActive: { int: this.active }, uSeed: { int: (Math.imul(this.tickCount + 1, 0x9e3779b1) ^ this.seed) | 0 },
+            uGrid: [this.gridW, this.gridH], uSensorDistance: S.sensorDistance, uCosSensor: Math.cos(S.sensorAngle), uSinSensor: Math.sin(S.sensorAngle),
+            uTurnAngle: S.turnAngle, uJitter: S.jitter, uWildJitter: S.wildJitter, uSpeed: S.speed,
+            uPenJitter: P.jitter, uPenSpeed: P.speed, uPenLife: [P.life[0], P.life[1]],
         });
         gl.drawArrays(gl.TRIANGLES, 0, 3);
         this.agentRead = 1 - this.agentRead;
     }
 
-    /** Pass 6a: one point per agent, added to the coarse trail. */
+    /** Deposit, part one: one point per agent that moved, added to the trail. */
     depositTrail() {
         const gl = this.gl;
         const read = this.agentSets[this.agentRead];
         this.bindTarget(this.trail.fbo, this.gridW, this.gridH);
         this.additive(true);
         this.programs.trailDeposit.use().set({
-            uStateA: { tex: read.a }, uStateB: { tex: read.b }, uGuide: { tex: this.guideTex }, uSide: { int: this.side }, uActive: { int: this.active },
-            uSize: [this.W, this.H], uGrid: [this.gridW, this.gridH], uDeposit: LOOK.trail.deposit * this.depositRatio,
+            uStateA: { tex: read.a }, uStateB: { tex: read.b }, uSide: { int: this.side }, uActive: { int: this.active },
+            uGrid: [this.gridW, this.gridH], uDeposit: LOOK.sim.deposit * this.depositRatio,
         });
         gl.drawArrays(gl.POINTS, 0, this.active);
     }
 
-    /** Pass 6b: one point per agent at its lane, added to the full-size ink target. */
-    depositInk() {
+    /** Deposit, part two: three points per agent (non-pens go offscreen), added to the full-size hair target. */
+    depositHair() {
         const gl = this.gl;
-        const I = LOOK.ink;
         const read = this.agentSets[this.agentRead];
-        this.bindTarget(this.ink.fbo, this.W, this.H);
+        this.bindTarget(this.hair.fbo, this.W, this.H);
         this.additive(true);
-        this.programs.inkDeposit.use().set({
-            uStateA: { tex: read.a }, uStateB: { tex: read.b }, uGuide: { tex: this.guideTex }, uGrain: { tex: this.grainTex },
-            uSide: { int: this.side }, uActive: { int: this.active }, uSize: [this.W, this.H], uGrid: [this.gridW, this.gridH],
-            uDeposit: I.deposit * this.depositRatio, uDryBrush: I.dryBrush, uGrainStretch: I.grainStretch,
-            uLaneSpread: I.laneSpread, uLaneMinimum: I.laneMinimum * this.unit,
+        this.programs.hairDeposit.use().set({
+            uStateA: { tex: read.a }, uStateB: { tex: read.b }, uSide: { int: this.side }, uActive: { int: this.active },
+            uScale: [this.scaleX, this.scaleY], uOut: [this.W, this.H], uPenSpeed: LOOK.pens.speed, uPenDeposit: LOOK.pens.deposit,
         });
-        gl.drawArrays(gl.POINTS, 0, this.active);
+        gl.drawArrays(gl.POINTS, 0, this.active * 3);
     }
 
-    /** Pass 7: horizontal then vertical three-wide blur, with the decay on the second. */
-    diffuseTrail() {
+    /** Diffuse: horizontal then vertical three-wide blur, with the decay on the second. */
+    diffuse() {
         const gl = this.gl;
-        const { blend, decay } = LOOK.trail;
+        const { blend, decay } = LOOK.sim;
         this.additive(false);
         const run = (from, to, step, scale) => {
             this.bindTarget(to.fbo, this.gridW, this.gridH);
-            this.programs.diffuse.use().set({ uSource: { tex: from.tex }, uStep: [step[0], step[1]], uGrid: [this.gridW, this.gridH], uKeep: 1 - blend, uThird: blend / 3, uScale: scale });
+            this.programs.diffuse.use().set({ uSource: { tex: from.tex }, uStep: [step[0], step[1]], uGrid: [this.gridW, this.gridH], uKeep: 1 - blend, uThird: blend / 3, uScale: scale, uColony: { tex: this.colonyTex }, uEdgeOn: scale === 1 ? 0 : 1 });
             gl.drawArrays(gl.TRIANGLES, 0, 3);
         };
         run(this.trail, this.trailScratch, [1, 0], 1);
         run(this.trailScratch, this.trail, [0, 1], decay);
     }
 
+    /** Wash: a fullscreen pass at grid size adding a little trail to the ink that owns each cell, and on some ticks moving the ink. */
+    washTrail(moveInk) {
+        const gl = this.gl;
+        const read = this.washSets[this.washRead];
+        const write = this.washSets[1 - this.washRead];
+        this.additive(false);
+        this.bindTarget(write.fbo, this.gridW, this.gridH);
+        this.programs.wash.use().set({ uPrevious: { tex: read.tex }, uTrail: { tex: this.trail.tex }, uColony: { tex: this.colonyTex }, uFields: { tex: this.fieldsTex }, uRate: LOOK.ink.washRate, uInkCount: { int: this.inkCount }, uGrid: [this.gridW, this.gridH], uMove: { int: moveInk ? 1 : 0 }, uFade: LOOK.ink.washFade });
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+        this.washRead = 1 - this.washRead;
+        if (moveInk) this.fadeHair();
+    }
+
+    /** All hair slowly fades, so a sheet left running keeps changing instead of filling in. */
+    fadeHair() {
+        const gl = this.gl;
+        this.bindTarget(this.hair.fbo, this.W, this.H);
+        gl.enable(gl.BLEND);
+        gl.blendColor(0, 0, 0, LOOK.ink.hairFade);
+        gl.blendFunc(gl.ZERO, gl.CONSTANT_ALPHA);
+        this.programs.fade.use();
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+        gl.disable(gl.BLEND);
+    }
+
     /** Paints the frame onto the canvas. `target` is accepted for API parity with the CPU engine and ignored. */
     compose(target, { wave = null } = {}) {
         const gl = this.gl;
-        const P = LOOK.paint;
+        const I = LOOK.ink;
         this.additive(false);
         this.bindTarget(null, this.W, this.H);
         this.programs.compose.use().set({
-            uInk: { tex: this.ink.tex }, uPaper: { tex: this.paperTex }, uGuide: { tex: this.guideTex }, uKs: { vec3s: this.ks },
-            uPixels: [this.W, this.H], uGrid: [this.gridW, this.gridH], uWaveOn: { int: wave === null ? 0 : 1 }, uFront: wave === null ? 0 : waveFront(wave),
-            uWaveWidth: LOOK.wave.width, uWaveStrength: LOOK.wave.strength, uInkStrength: this.inkStrength,
-            uMaxConcentration: P.maxConcentration, uDepositToConcentration: P.depositToConcentration, uAlphaDensity: P.alphaDensity,
-            uTransparent: { int: this.transparent ? 1 : 0 },
+            uHair: { tex: this.hair.tex }, uWash: { tex: this.washSets[this.washRead].tex }, uColony: { tex: this.colonyTex }, uRough: { tex: this.roughTex }, uPaper: { tex: this.paperTex },
+            uInks: { vec3s: this.inkRgb }, uInkPick: I.pick, uWaveColour: this.waveRgb, uPixels: [this.W, this.H], uGrid: [this.gridW, this.gridH], uScale: [this.scaleX, this.scaleY],
+            uInkCount: { int: this.inkCount }, uWaveOn: { int: wave === null ? 0 : 1 }, uTransparent: { int: this.transparent ? 1 : 0 },
+            uGamma: I.gamma * this.inkStrength, uContrast: I.contrast, uHairDarken: I.hairDarken,
+            uRim: I.rim, uRimRadius: I.rimRadius, uGranulation: I.granulation, uToothStretch: I.toothStretch,
+            uEdgeAt: I.edgeAt, uEdgeSoft: I.edgeSoft, uFillThin: I.fillThin, uHalo: I.halo, uHairGain: I.hairGain, uWispShow: I.wispShow,
+            uFront: wave === null ? 0 : waveFront(wave), uWaveWidth: LOOK.wave.width, uWaveStrength: LOOK.wave.strength,
         });
         gl.drawArrays(gl.TRIANGLES, 0, 3);
     }

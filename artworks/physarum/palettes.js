@@ -6,18 +6,18 @@
 //   label   name shown in the UI
 //   paper   sheet colour
 //   pencil  colour of the grid and construction lines drawn on the paper
-//   inks    1 to 4 paints. inks[0] sits at the source of the network, later inks reach towards the tips.
-//           (Four is the maximum: the GPU engine keeps one ink per channel of a single texture.)
-//   wave    the colour of the pulse that runs back along the veins
+//   inks    1 to 4 paints. inks[0] sits at the source of the network, later inks reach out towards the far side.
+//   wave    the colour the ink is pulled toward by the wave that runs outward through the network
 //
-// Paints are mixed like real pigment (Kubelka-Munk), so yellow + blue gives green, not grey.
+// Inks never mix like paint: the strongest ink at a point decides its colour, softly averaged where two inks switch, so
+// crossings can not turn black. A near-black ink stays near-black, so leave it out to keep a palette free of black.
 
 export const PALETTES = {
     vermilion: {
         label: 'Vermilion & ultramarine',
         paper: '#dad5c9',
         pencil: '#6f6a5e',
-        inks: ['#2b2a3c', '#ec1c2e', '#1d4bb0'],
+        inks: ['#ec1c2e', '#1d4bb0'],
         wave: '#ec1c2e',
     },
     ink: {

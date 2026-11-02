@@ -180,7 +180,7 @@ Modes and flags below match each `artworks/<id>/clip.js`. The generated table wi
 | `fire` | step | `burn`, `ember` | Dense. Grid `W / (10 * unit)` by `H / (18 * unit)`. Flames rise from the bottom edge. Params: `ink` (used by `ember`), `height`. Background black |
 | `walker` | step | `trails`, `fade` | Walker count scales with area. Step lengths scaled by `unit`. `fade` works when transparent via `p.erase`. Params: `palette`, `weight`, `stride`, `speed`, `fade`. Default duration 8 s |
 
-| `physarum` | step | `bloom` (reveal), `colonies` (reveal), `veins` (loops) | Slime-mould network in mixing paint on paper, then a colour wave. CPU engine, 1500 ticks to grow, so a late frame replays them all (about 57 ms a tick at 1080p). Uses `render`. Params: `palette`, `inkStrength`, `agentScale`, `pencil`. Default duration 20 s. See [physarum.md](physarum.md) |
+| `physarum` | step | `bloom` (reveal), `colonies` (reveal), `veins` (loops) | Unguided slime-mould simulation in coloured ink on paper, then a colour wave. CPU engine, 400 ticks of 340,000 agents to grow, so a late frame replays them all (about 70 ms a tick at 1080p, about 28 s for frame 480). Uses `render`. Params: `palette`, `spread`, `evenness`, `inkStrength`, `agentScale`, `pencil`. Default duration 20 s. See [physarum.md](physarum.md) |
 
 Index-only: `dekhi`, `ngon-demo`, `daisys` (`still`), `plotter`, `retro-fx` (`tool`).
 

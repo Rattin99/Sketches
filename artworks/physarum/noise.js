@@ -1,4 +1,4 @@
-// Small seeded value noise, shared by the map, the sheet and the engines. Pure: no p5, no Math.random.
+// Small seeded value noise, shared by the colony, the sheet and the roughness bake. Pure: no p5, no Math.random.
 
 /** Integer-lattice hash -> 0..1. */
 export function hash2(ix, iy, seed) {

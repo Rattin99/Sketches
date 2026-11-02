@@ -1,9 +1,15 @@
 // The sheet: paper grain, mottling and the pencil drawing under the ink. Pure apart from the 2D context it draws on,
-// so it loads in plain Node. makeGrain() is shared with the engines, which use it to break strokes up (dry brush).
+// so it loads in plain Node. makeGrain() makes the paper tooth; the engines pass it in so the sheet is drawn once.
 import { mulberry32 } from '../../tools/hatching.js';
 import { LOOK } from './look.js';
 import { hash2 } from './noise.js';
-import { hexToRgb } from './pigment.js';
+
+/** '#rrggbb' or '#rgb' as [r, g, b] in 0..1. */
+export function hexToRgb(hex) {
+    const h = hex.replace('#', '');
+    const n = parseInt(h.length === 3 ? h.replace(/./g, '$&$&') : h, 16);
+    return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
+}
 
 const TAU = Math.PI * 2;
 const smooth = (t) => t * t * (3 - 2 * t);
@@ -95,12 +101,11 @@ function drawGrid(g, W, H) {
     }
 }
 
-/** Fans of thin lines, circles and hatched patches, anchored on the map so each seed gets its own marks. */
-function drawConstruction(g, W, H, map, seed, unit) {
+/** Fans of thin lines, circles and hatched patches, anchored on the given points so each seed gets its own marks. */
+function drawConstruction(g, W, H, anchors, seed) {
     const L = LOOK.sheet;
     const rng = mulberry32(seed ^ 0xc0ffee);
     const short = Math.min(W, H);
-    const anchors = [...map.sources, ...map.paths.filter((p) => p.kind === 'vein').map((p) => p.points[Math.floor(p.points.length / 2)])];
     const anchor = () => anchors[Math.floor(rng() * anchors.length)];
     g.globalAlpha = L.constructionAlpha;
     for (let i = 0; i < L.fanCount; i++) {
@@ -130,9 +135,10 @@ function drawConstruction(g, W, H, map, seed, unit) {
 /**
  * Paper, then (if `pencil`) the pencil drawing. Call once and keep the pixels.
  * @param g       2D context of a W x H canvas
+ * @param anchors plain list of {x, y} in pixels (colony.js anchorPoints) where the pencil marks are centred
  * @param grain   result of makeGrain(), passed in so the engine can reuse it
  */
-export function drawSheet(g, W, H, map, palette, seed, grain, { pencil = true } = {}) {
+export function drawSheet(g, W, H, anchors, palette, seed, grain, { pencil = true } = {}) {
     const unit = Math.min(W, H) / 1080;
     drawPaper(g, W, H, palette, seed, unit, grain);
     if (!pencil) return;
@@ -141,6 +147,6 @@ export function drawSheet(g, W, H, map, palette, seed, grain, { pencil = true } 
     g.strokeStyle = `rgb(${r},${gr},${b})`;
     g.lineWidth = Math.max(0.5, LOOK.sheet.pencilWidth * unit);
     drawGrid(g, W, H);
-    drawConstruction(g, W, H, map, seed, unit);
+    drawConstruction(g, W, H, anchors, seed);
     g.restore();
 }
