@@ -365,6 +365,8 @@ fx.render(p.canvas, params, {
 
 Other exports from `renderer.js`: `DEFAULT_PARAMS`, `isDiffusion(algorithm)`, `unitFor(W, H)`, and the tables `ORDERED`, `DIFFUSION`, `PALETTES`, `CHARSETS`.
 
+For frame-order-safe use (Remotion, parallel renders, scrubbing), use `createRetroRunner()` in `clips/retro.js` instead of calling `RetroRenderer` directly. It replays diffusion history for image and clip sources and forces `stability` to 0 for video. See [clips.md](clips.md#retro-fx-and-frame-order).
+
 ---
 
 ## Extending

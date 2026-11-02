@@ -22,15 +22,22 @@ Open the gallery and click an artwork, or go straight to one with `?artwork=<id>
 
 The tools have their own shortcuts: `Space` play/pause, `R` reroll (new strokes / new noise seed), `S` save PNG.
 
+## Clip library
+
+The sketches double as a video clip library. Most of them have a `clip.js` that renders any frame on demand, at any size, with or without a background. Open one in the player at `?clip=<id>` (e.g. `http://localhost:5173/?clip=mesh`), or use it from Remotion. See the [clip library](docs/clips.md) and the [sketch index](docs/sketches.md).
+
 ## Documentation
 
 Everything lives in [`docs/`](docs/README.md):
 
 - [Docs index](docs/README.md): start here. It has an index of every artwork and tool.
+- [Clip library](docs/clips.md) covers the clip format, the player, `?verify`, and using clips in Remotion.
+- [Sketch index](docs/sketches.md) is the generated list of every sketch with its modes.
 - [Architecture](docs/architecture.md) covers how the gallery is wired and how to add a new artwork.
 - [Tools reference](docs/tools.md) documents the shared helpers in `tools/`.
 - [Artworks catalogue](docs/artworks.md) describes what each sketch does and how.
 - [Plotter](docs/plotter.md) covers the image/video → ink tool: usage, the algorithm, parameters, export, and the Remotion port.
+- [Physarum](docs/physarum.md) covers the slime-mould piece: how the unguided simulation works, the CPU and GPU engines, palettes, tuning and render cost.
 - [Retro FX](docs/retro-fx.md) covers the image/video → ASCII / dither tool: usage, the rendering pipeline, motion and seamless loops, every parameter, export, and using the engine from other sketches.
 
 ## Layout
@@ -42,6 +49,8 @@ styles/styles.css     gallery styles
 tools/                shared helpers (controls, color, shapes, hatching engine,
                       tool panel / MP4 export / tool layout CSS)
 tools/retro/          WebGL2 ASCII + dither engine used by Retro FX
-artworks/<id>/        one folder per artwork, entry file sketch.js
+artworks/<id>/        one folder per artwork, entry file sketch.js (clip.js beside it)
+clips/                clip library: define, runtime, Retro runner, player, verify
+scripts/              build-index.mjs writes docs/sketches.md (npm run index)
 docs/                 documentation
 ```

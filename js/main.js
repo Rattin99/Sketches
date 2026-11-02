@@ -1,4 +1,6 @@
 import p5 from 'p5';
+import { CLIPS, getClip } from '../clips/index.js';
+import { EFFECTS, getEffect } from '../effects/index.js';
 
 import fire from '../artworks/fire/sketch.js';
 import mouth from '../artworks/mouth/sketch.js';
@@ -15,6 +17,7 @@ import ngonDemo from '../artworks/ngon-demo/sketch.js';
 import daisys from '../artworks/daisys/sketch.js';
 import plotter from '../artworks/plotter/sketch.js';
 import retroFx from '../artworks/retro-fx/sketch.js';
+import physarum from '../artworks/physarum/sketch.js';
 
 const ARTWORKS = [
     { id: 'fire', name: 'Fire', sketch: fire },
@@ -32,20 +35,61 @@ const ARTWORKS = [
     { id: 'daisys', name: 'Daisys', sketch: daisys },
     { id: 'plotter', name: 'Plotter (image/video → ink)', sketch: plotter },
     { id: 'retro-fx', name: 'Retro FX (image/video → ASCII · dither)', sketch: retroFx },
+    { id: 'physarum', name: 'Physarum', sketch: physarum },
 ];
 
-function getRequestedId() {
-    return new URLSearchParams(window.location.search).get('artwork');
-}
+const query = new URLSearchParams(window.location.search);
+
+const KIND_LABELS = { time: 'clip', step: 'clip', still: 'still', tool: 'tool', pending: 'sketch' };
 
 function renderGallery(container) {
     container.classList.add('gallery');
-    for (const artwork of ARTWORKS) {
-        const link = document.createElement('a');
-        link.href = `?artwork=${artwork.id}`;
-        link.className = 'gallery-item';
-        link.textContent = artwork.name;
-        container.appendChild(link);
+    for (const clip of CLIPS) {
+        const tile = document.createElement('div');
+        tile.className = 'gallery-item';
+
+        const title = document.createElement('a');
+        title.href = `?artwork=${clip.id}`;
+        title.className = 'gallery-title';
+        title.textContent = clip.name;
+
+        const badge = document.createElement('span');
+        badge.className = `badge badge-${clip.kind}`;
+        badge.textContent = KIND_LABELS[clip.kind];
+
+        const desc = document.createElement('p');
+        desc.className = 'gallery-desc';
+        desc.textContent = clip.description;
+
+        tile.append(title, badge, desc);
+        if (clip.runnable) {
+            const play = document.createElement('a');
+            play.href = `?clip=${clip.id}`;
+            play.className = 'gallery-clip';
+            play.textContent = 'Open clip →';
+            tile.append(play);
+        }
+        container.appendChild(tile);
+    }
+    for (const effect of EFFECTS) {
+        const tile = document.createElement('div');
+        tile.className = 'gallery-item';
+
+        const title = document.createElement('a');
+        title.href = `?effect=${effect.id}`;
+        title.className = 'gallery-title';
+        title.textContent = effect.name;
+
+        const badge = document.createElement('span');
+        badge.className = 'badge badge-effect';
+        badge.textContent = 'effect';
+
+        const desc = document.createElement('p');
+        desc.className = 'gallery-desc';
+        desc.textContent = effect.description;
+
+        tile.append(title, badge, desc);
+        container.appendChild(tile);
     }
 }
 
@@ -60,9 +104,17 @@ function renderArtwork(container, artwork) {
 }
 
 const container = document.getElementById('container');
-const requested = ARTWORKS.find((a) => a.id === getRequestedId());
+const requested = ARTWORKS.find((a) => a.id === query.get('artwork'));
 
-if (requested) {
+if (query.has('verify-effects')) {
+    import('../effects/verify.js').then((m) => m.runVerify(container));
+} else if (query.has('effect')) {
+    import('../effects/player.js').then((m) => m.renderPlayer(container, getEffect(query.get('effect'))));
+} else if (query.has('verify')) {
+    import('../clips/verify.js').then((m) => m.runVerify(container));
+} else if (query.has('clip')) {
+    import('../clips/player.js').then((m) => m.renderPlayer(container, getClip(query.get('clip'))));
+} else if (requested) {
     renderArtwork(container, requested);
 } else {
     renderGallery(container);

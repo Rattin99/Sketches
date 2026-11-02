@@ -4,6 +4,8 @@
 
 Each artwork lives in `artworks/<id>/sketch.js` and opens at `?artwork=<id>`. Unless noted, sketches draw one still frame (`noLoop`). Press `R` for a new random variation and `S` to save a PNG.
 
+Animated versions of these sketches live in `artworks/<id>/clip.js`. See [clips.md](clips.md).
+
 ---
 
 ## Fire
@@ -95,6 +97,12 @@ One wobbly black hand-drawn circle with a random radius (1–150) and 100 px wob
 
 This one is a tool, not a single artwork. Upload a photo or video and it's redrawn as pen-plotter ink (cross-hatching, parallel hatching or wave lines), with export to PNG, SVG and MP4. Full documentation: **[plotter.md](plotter.md)**.
 
+## Physarum (slime mould in paint)
+
+`physarum` · 1920×1080 · uses `tools/retro/gl.js` · **animated**
+
+A real slime-mould simulation: hundreds of thousands of unguided agents follow each other's trails across a sheet of paper and leave coloured ink (a soft wash plus fine pen hairs; inks never mix), then a colour wave runs outward through the network. Press `R` for a new seed, `P` for the next palette, `S` to save, `Space` to pause. The same piece is a clip (`?clip=physarum`) that uses the CPU engine; the live sketch uses WebGL2, with the same rules and composition but not pixel-identical. Full documentation: **[physarum.md](physarum.md)**.
+
 ## Retro FX (image/video → ASCII · dither)
 
 `retro-fx` · output-sized · uses `tools/retro/` · **animated**
@@ -102,3 +110,9 @@ This one is a tool, not a single artwork. Upload a photo or video and it's redra
 Also a tool. Upload a photo or video and it's rendered as ASCII art (several glyph ramps, edge-following line glyphs, source or palette colours) or dithered (Bayer, halftone dots, blue noise, or Floyd–Steinberg / Atkinson / JJN / Stucki / Sierra error diffusion), with optional CRT post (scanlines, curvature, chromatic offset, bloom, grain). The effect is animated even on stills: drift, boil, waves, scan bands, glyph scrambling and decode sweeps, with seamless loops. It runs on WebGL2 and exports PNG and frame-exact MP4. Full documentation: **[retro-fx.md](retro-fx.md)**.
 
 The older **Fire** sketch is a hand-rolled ASCII effect. Retro FX is the general-purpose one, and its engine can post-process any sketch's canvas (see [Using the engine in other sketches](retro-fx.md#using-the-engine-in-other-sketches)).
+
+## Patchwork and the effect library
+
+`patchwork` and ten single-look effects (`dither-1bit`, `halftone-dots`, `pixel-posterize`, `ink-threshold`, `ascii-glyph`, `contour-lines`, `mesh-grid`, `stipple`, `wave-lines`, `slice-glitch`) · output-sized · open at `?effect=<id>`
+
+These are effects, not sketches: they need an input picture. **Patchwork** keeps the picture whole and lays random square tiles over it, each showing the picture under it through a different library effect, in a palette of paper and inks. In motion the tiles swap effect on a beat and hop to new grid slots, and the clip loops. The ten library effects each run alone too. Full documentation: **[effects.md](effects.md)**.

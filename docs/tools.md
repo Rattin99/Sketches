@@ -186,6 +186,8 @@ It's a copy of `artworks/plotter/plotter.css` with generic class names, plus sup
 
 The WebGL2 engine behind [Retro FX](retro-fx.md): ASCII, ordered and error-diffusion dithering, time-driven motion, bloom and CRT post. It's framework-free and takes any `<img>`, `<video>` or `<canvas>` (including a p5 canvas) as its source.
 
+`tools/retro/gl.js` is also used by [Physarum](physarum.md). Its helpers accept an optional vertex shader (`new Program(gl, frag, vert)`; omit it for the fullscreen triangle) and `createTexture` / `Target` take `format: 'rgba16f' | 'rgba32f'` besides `'rgba8'` and `'r8'`. Rendering to float formats needs `EXT_color_buffer_float`, blending into `rgba32f` needs `EXT_float_blend`, and linear filtering of `rgba32f` needs `OES_texture_float_linear`.
+
 ```js
 import { RetroRenderer, DEFAULT_PARAMS } from '../../tools/retro/renderer.js';
 

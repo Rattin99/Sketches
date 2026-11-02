@@ -6,9 +6,10 @@
 
 - **p5.js 1.x** in [instance mode](https://github.com/processing/p5.js/wiki/Global-and-instance-mode). Every sketch receives a `p` object instead of using globals, so many sketches can live in one bundle without clashing.
 - **Vite 5** dev server / bundler (`npm run dev`, `npm run build`, `npm run preview`).
-- **WebGL2** (no library) renders Retro FX. See `tools/retro/gl.js`.
+- **WebGL2** (no library) renders Retro FX and the live Physarum sketch. See `tools/retro/gl.js`.
 - **mp4-muxer** is used only by the tools' MP4 export (`tools/video-export.js`).
-- Plain ES modules everywhere, with no framework.
+- Plain ES modules everywhere, with no framework. `package.json` sets `"type": "module"`, so Node scripts such as `scripts/build-index.mjs` can import `clips/index.js` directly.
+- The package `exports` map exposes `./clips`, `./clips/runtime`, `./clips/retro`, `./retro` and `./retro-presets`. Other repos (collage-video-engine) import clips and the Retro engine through it. See [clips.md](clips.md#using-clips-in-remotion).
 
 ## How a page load works
 
@@ -17,12 +18,18 @@ index.html
   └─ <script type="module" src="js/main.js">
         ├─ imports every artworks/<id>/sketch.js
         ├─ ARTWORKS = [{ id, name, sketch }, ...]
-        └─ reads ?artwork=<id> from the URL
-              ├─ no / unknown id → renderGallery(): a link per artwork
-              └─ known id        → renderArtwork(): "← All artworks" link
-                                   + new p5(artwork.sketch, #container)
+        └─ reads the query string
+              ├─ ?verify-effects[=id,id] → effects/verify.js: automated effect checks
+              ├─ ?effect=<id>    → effects/player.js: drop an image, scrub / play / export an effect
+              ├─ ?verify[=id,id] → clips/verify.js: automated clip checks
+              ├─ ?clip=<id>      → clips/player.js: scrub / play / export a clip
+              ├─ ?artwork=<id>   → renderArtwork(): "← All artworks" link
+              │                    + new p5(artwork.sketch, #container)
+              └─ otherwise       → renderGallery(): a tile per entry in CLIPS
 ```
 
+- The gallery also lists every entry of `EFFECTS` (`effects/index.js`) with an `effect` badge, linking to `?effect=<id>`. See [effects.md](effects.md).
+- The gallery reads from `CLIPS` in `clips/index.js`, not from `ARTWORKS`. Each tile shows the name, a kind badge and the description, links to `?artwork=<id>`, and adds an "Open clip" link to `?clip=<id>` for runnable clips. `ARTWORKS` only maps ids to sketches.
 - `#container` is the div in `index.html` that p5 appends its canvas to.
 - `styles/styles.css` gives the dark background, centres the canvas, and styles the gallery tiles.
 - `index.html` also loads p5 from cdnjs. The bundle imports p5 from npm, which is what's actually used. The CDN tag is a leftover and harmless.
@@ -68,7 +75,10 @@ Conventions used across the repo:
    { id: 'my-thing', name: 'My Thing', sketch: myThing },
    ```
 3. `npm run dev` and open `?artwork=my-thing`.
-4. Add a row to the [artwork index](README.md#artwork-index) and a section in [artworks.md](artworks.md).
+4. Create `artworks/<id>/clip.js` with `defineClip()`. Runnable clips need modes and `frame()` or `step()`. Sketches that are not worth animating use `kind: 'still'`. See [Adding a new clip](clips.md#adding-a-new-clip).
+5. Import the clip in `clips/index.js` and add it to `CLIPS`. The gallery reads this list, so a sketch without an entry does not appear.
+6. Run `npm run index` to regenerate [sketches.md](sketches.md), then open `?verify=<id>` to check a runnable clip.
+7. Add a row to the [artwork index](README.md#artwork-index) and a section in [artworks.md](artworks.md).
 
 ## Adding a tool sketch (upload → effect → export)
 
