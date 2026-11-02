@@ -49,7 +49,7 @@ export default defineEffect({
 
 Mode flags: `still` (nothing moves, verify expects identical frames), `loops` (last frame flows into the first), `boil` (`time.boilStep` re-rolls `boilRate` times a second), `reveal` (uses `time.reveal`). Optional `liveMode` names the mode other effects use when they run this one live (default: the first mode that is not `still`). Optional `alpha: 'moves'` declares that the effect shifts the source including its transparency (default `'keep'`).
 
-`baseParams(extra)` gives every effect `ink`, `paper`, `scale` (size multiplier), `contrast` and `invert` (flip tone). Param types are the same as clips: range, `color`, `select`, `toggle`.
+`baseParams(extra)` gives every effect `ink`, `paper`, `scale` (size multiplier), `contrast`, `black` and `white` (levels: the tones mapped to full ink and full paper) and `invert` (flip tone). Use `adjust(luma, params)` to apply them. Param types are the same as clips: range, `color`, `select`, `toggle`.
 
 ### `ctx`
 
@@ -131,7 +131,7 @@ How it works:
 
 1. The picture is drawn whole (optionally dimmed).
 2. A grid of `cols` columns is laid out in the middle of the frame (`inset` margin, `gap` between tiles). Tiles are square by default; `squareness` blends toward the image's own aspect ratio. `fill` of the grid cells hold a tile.
-3. Each tile picks one enabled library effect, one ink from the palette, and sometimes (`flip`) swaps ink and paper and inverts tone. The effect paints the picture under the tile (`ctx.region` = the tile), so the tile lines up with the backdrop like a window onto it.
+3. Each tile picks one enabled library effect and its colours, and sometimes (`flip`) swaps ink and paper with tone inverted, so the tile is light marks on a dark ground but still a positive picture. The effect paints the picture under the tile (`ctx.region` = the tile), so the tile lines up with the backdrop like a window onto it.
 4. In the moving modes, time is cut into beats (`rate` per second). Each tile re-rolls its effect at its own offset inside the beat (swap), and a share of tiles (`moveShare`) hop to free grid slots with an eased slide (hop). The slot schedule is built once in `setup` from the seed, so no two tiles share a slot at rest, and the clip loops when `duration * rate` is a whole number.
 
 | Mode | What happens |
@@ -149,13 +149,18 @@ How it works:
 | `fill` | 0.45 | Share of grid cells that hold a tile |
 | `rate` | 2 | Beats per second in the moving modes |
 | `moveShare` | 0.35 | Share of tiles that hop on each beat |
-| `scale` | 0.8 | Size multiplier passed to every tile effect |
-| `contrast` | 1.15 | Contrast passed to every tile effect |
+| `scale` | 0.5 | Size multiplier passed to every tile effect. Smaller means finer marks and a more readable picture |
+| `contrast` | 1.25 | Contrast passed to every tile effect |
+| `autoLevels` | 1 | Stretches the tones inside each tile to the full range (`autoLevels()` in `effects/util.js`), so flat skies and dark corners still show texture. 0 = off |
 | `flip` | 0.18 | Share of tiles with ink and paper swapped |
 | `dim` | 0 | Dims the picture behind the tiles |
 | `liveTiles` | on | Tiles animate inside (each effect's own moving mode). Off: tile content is static between swaps |
-| `palette` | `ember` | `ember`, `harbour`, `clay`, `pop`, `mono` |
+| `colour` | `palette` | Tile colours. `palette`: ink and paper from the palette below. `source`: ink and paper come from the picture inside each tile (`regionPalette()` in `effects/util.js`: its darker half deepened, its lighter half lifted), a quieter look where each tile keeps the hues of the area it covers. `mixed`: half and half |
+| `palette` | `ember` | `ember`, `harbour`, `clay`, `pop`, `mono`, or `custom` |
+| `customPaper`, `customInk1` ... `customInk4` | warm set | Colour pickers, used when `palette` is `custom`. Each tile takes the paper and one of the four inks at random |
 | `fx_*` | on | One toggle per library effect. Turn effects off to remove them from the mix |
+
+Tiles are small (about 15 to 30 marks across), so `TILE_SETTINGS` in `artworks/patchwork/effect.js` tightens soft or sparse effects inside tiles (less wobble, higher stipple density, fewer glitch bands). Palette inks are kept dark enough to read on their paper. For a custom palette, pick inks that contrast with the paper, or tiles will fade out. Source-colour pixel posterize skips the levels stretch and the invert, because stretching channels turns hues false and inverting makes a negative. Each tile effect is checked to follow the area under it: correlation between the tile and the picture beneath was 0.86 to 0.98 for eight effects, and contour lines (lines only) were lower, which the tone wash improves.
 
 To add an effect to the mix, import it in `artworks/patchwork/effect.js` and add a row to `LIBRARY`. To add a palette, add an entry to `PALETTES`.
 
@@ -170,7 +175,7 @@ All of these also work on their own at `?effect=<id>`. Modes and descriptions ar
 | `pixel-posterize` | Blocks averaged from four samples, cut to N levels in source colours or ink-to-paper | `levels`, `colour` |
 | `ink-threshold` | Tone cut with value-noise wobble, per-pixel grain and a soft edge | `threshold`, `wobble`, `grain` |
 | `ascii-glyph` | Glyph per cell from `CHARSETS`, drawn with `fillText`. `scramble` decodes left to right | `charset`, `colour` |
-| `contour-lines` | Iso-lines of blurred tone, constant pixel width from the gradient, plus Sobel edge strokes | `levels`, `lineWidth`, `blur`, `edges` |
+| `contour-lines` | Iso-lines of blurred tone, constant pixel width from the gradient, plus Sobel edge strokes and a light tone wash between the lines | `levels`, `lineWidth`, `blur`, `edges`, `wash` |
 | `mesh-grid` | Rotated lattice of woven bars, thickness follows tone | `angle`, `weave`, `tint` |
 | `stipple` | One jittered dot per cell, kept with probability from tone | `density` |
 | `wave-lines` | Horizontal wavy ribbons whose thickness follows tone | `wave` |

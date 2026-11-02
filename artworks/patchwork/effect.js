@@ -1,7 +1,7 @@
 // Patchwork: the picture stays whole, and a grid of tiles lies over it. Every tile shows the picture under it
 // through a different library effect. Tiles swap effect on a beat, hop to new grid slots, or both.
 import { defineEffect, resolveParams } from '../../effects/define.js';
-import { clamp01, easeInOutSine, hashXY, lerp, mix, mulberry32 } from '../../effects/util.js';
+import { autoLevels, regionPalette, clamp01, easeInOutSine, hashXY, lerp, mix, mulberry32 } from '../../effects/util.js';
 import { PALETTES, PALETTE_IDS } from './palettes.js';
 
 import halftoneDots from '../halftone-dots/effect.js';
@@ -28,6 +28,21 @@ const LIBRARY = [
     ['waves', waveLines, 'Wave lines'],
     ['glitch', sliceGlitch, 'Slice glitch'],
 ];
+
+// Settings that keep each effect readable inside a small tile. They sit on top of the effect's own defaults.
+// Tiles are only about 15 to 30 marks across, so soft or sparse looks get tightened here.
+const TILE_SETTINGS = {
+    'dither-1bit': {},
+    'halftone-dots': { dotSize: 1.05 },
+    'pixel-posterize': { levels: 5 },
+    'ink-threshold': { wobble: 0.06, grain: 0.05 },
+    'ascii-glyph': { charset: 'detailed' },
+    'contour-lines': { levels: 7, lineWidth: 1.8, blur: 1, wash: 0.45 },
+    'mesh-grid': { weave: false },
+    stipple: { density: 1.5 },
+    'wave-lines': { wave: 0.35 },
+    'slice-glitch': { shift: 20, density: 0.3, split: 4 },
+};
 
 const toggles = Object.fromEntries(LIBRARY.map(([key, , label]) => [`fx_${key}`, { default: true, label }]));
 
@@ -63,12 +78,29 @@ export default defineEffect({
         fill: { default: 0.45, min: 0.05, max: 1, step: 0.01, label: 'Tiles shown' },
         rate: { default: 2, min: 0.5, max: 6, step: 0.5, label: 'Beats per second' },
         moveShare: { default: 0.35, min: 0, max: 1, step: 0.05, label: 'Tiles that hop per beat' },
-        scale: { default: 0.8, min: 0.25, max: 3, step: 0.05, label: 'Effect scale' },
-        contrast: { default: 1.15, min: 0.5, max: 2.5, step: 0.05, label: 'Contrast' },
+        scale: { default: 0.5, min: 0.25, max: 3, step: 0.05, label: 'Effect scale (smaller = finer)' },
+        contrast: { default: 1.25, min: 0.5, max: 2.5, step: 0.05, label: 'Contrast' },
+        autoLevels: { default: 1, min: 0, max: 1, step: 0.05, label: 'Stretch each tile to full tone range' },
         flip: { default: 0.18, min: 0, max: 1, step: 0.01, label: 'Inverted tiles' },
         dim: { default: 0, min: 0, max: 0.8, step: 0.01, label: 'Dim picture behind' },
         liveTiles: { default: true, label: 'Tiles animate inside' },
-        palette: { default: 'ember', type: 'select', options: PALETTE_IDS.map((id) => [id, PALETTES[id].label]), label: 'Palette' },
+        colour: {
+            default: 'palette',
+            type: 'select',
+            options: [['palette', 'Palette inks'], ['source', 'From the picture under each tile'], ['mixed', 'Half and half']],
+            label: 'Tile colours',
+        },
+        palette: {
+            default: 'ember',
+            type: 'select',
+            options: [...PALETTE_IDS.map((id) => [id, PALETTES[id].label]), ['custom', 'Custom (set the colours below)']],
+            label: 'Palette',
+        },
+        customPaper: { default: '#f3e9d8', type: 'color', label: 'Custom: paper' },
+        customInk1: { default: '#c2301a', type: 'color', label: 'Custom: ink 1' },
+        customInk2: { default: '#2a4fe0', type: 'color', label: 'Custom: ink 2' },
+        customInk3: { default: '#00775a', type: 'color', label: 'Custom: ink 3' },
+        customInk4: { default: '#16120f', type: 'color', label: 'Custom: ink 4' },
         ...toggles,
     },
     setup(ctx) {
@@ -120,7 +152,9 @@ export default defineEffect({
         const swaps = mode === 'both' || mode === 'swap';
         const hops = mode === 'both' || mode === 'shuffle';
         const live = mode !== 'still' && p.liveTiles;
-        const pal = PALETTES[p.palette] ?? PALETTES.ember;
+        const pal = p.palette === 'custom'
+            ? { paper: p.customPaper, inks: [p.customInk1, p.customInk2, p.customInk3, p.customInk4] }
+            : PALETTES[p.palette] ?? PALETTES.ember;
         const enabled = children.filter((c) => p[`fx_${c.key}`]);
         const pool = enabled.length ? enabled : children;
         const beatPos = mode === 'still' ? 0 : time.t * rate;
@@ -161,20 +195,29 @@ export default defineEffect({
             const h = mix(mix(seed, tile.i + 1), tile.ke);
             const child = pool[h % pool.length];
             const flipped = hashXY(tile.i, tile.ke, seed + 99) < p.flip;
-            const ink = pal.inks[(h >>> 8) % pal.inks.length];
+            const r = { x: Math.round(tile.rect.x), y: Math.round(tile.rect.y), w: Math.round(tile.rect.w), h: Math.round(tile.rect.h) };
+            const lv = p.autoLevels > 0 ? autoLevels(input, r) : { black: 0, white: 1 };
+            const fromPicture = p.colour === 'source' || (p.colour === 'mixed' && hashXY(tile.i, tile.ke, seed + 7) < 0.5);
+            // Picture colours keep a tile recognisable as the area it covers. Palette inks are a stylised alternative.
+            const own = fromPicture ? regionPalette(input, r) : { ink: pal.inks[(h >>> 8) % pal.inks.length], paper: pal.paper };
             const params = {
-                ...resolveParams(child.effect),
-                ink: flipped ? pal.paper : ink,
-                paper: flipped ? ink : pal.paper,
+                ...resolveParams(child.effect, TILE_SETTINGS[child.effect.id]),
+                // Pixel posterize keeps the picture's own colours only in picture mode, so palette tiles obey the palette.
+                ...(child.effect.id === 'pixel-posterize' ? { colour: fromPicture ? 'source' : 'duotone' } : {}),
+                // Flipped tiles are light marks on a dark ground, so tone is inverted to keep the picture a positive.
+                ink: flipped ? own.paper : own.ink,
+                paper: flipped ? own.ink : own.paper,
+                invert: flipped,
                 scale: p.scale,
                 contrast: p.contrast,
+                black: lv.black * p.autoLevels,
+                white: 1 - (1 - lv.white) * p.autoLevels,
             };
             const childMode = live ? child.effect.liveMode : child.effect.modes.find((m) => m.still)?.id ?? child.effect.modes[0].id;
             const modeDef = child.effect.modes.find((m) => m.id === childMode);
             const childTime = live
                 ? { ...time, boilStep: modeDef.boil ? Math.floor(time.t * ctx.boilRate) : 0 }
                 : { ...time, boilStep: 0, phase: 0, reveal: 1 };
-            const r = { x: Math.round(tile.rect.x), y: Math.round(tile.rect.y), w: Math.round(tile.rect.w), h: Math.round(tile.rect.h) };
             child.effect.apply({ ...ctx, region: r, seed: h, mode: childMode, params }, child.state, childTime, input);
             if (child.effect.alpha !== 'keep' && input.hasAlpha) {
                 // Effects that move the source (slice glitch) are cut back to the picture's own silhouette.

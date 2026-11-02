@@ -1,5 +1,5 @@
 import { defineEffect } from '../../effects/define.js';
-import { adjust, baseParams, hexToRgb, regionOf } from '../../effects/util.js';
+import { adjust, baseParams, clamp01, hexToRgb, regionOf } from '../../effects/util.js';
 
 export default defineEffect({
     id: 'pixel-posterize',
@@ -57,8 +57,10 @@ export default defineEffect({
                         const q = Math.round(adjust((0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2]) / 255, p) * L) / L;
                         rgb = [ink[0] + (paper[0] - ink[0]) * q, ink[1] + (paper[1] - ink[1]) * q, ink[2] + (paper[2] - ink[2]) * q];
                     } else {
-                        rgb = c.map((v) => Math.round(adjust(v / 255, { ...p, invert: false }) * L) / L * 255);
-                        if (p.invert) rgb = rgb.map((v) => 255 - v);
+                        // Source colours skip the levels stretch: stretching each channel by a luminance range
+                        // pushes hues to false colour (a brown horse turns yellow) and the picture stops reading.
+                        // Invert tone only applies to the ink-and-paper look. In source colours it would be a negative.
+                        rgb = c.map((v) => Math.round(clamp01(v / 255) * L) / L * 255);
                     }
                 }
                 o[oi] = rgb[0];

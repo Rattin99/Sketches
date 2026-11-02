@@ -46,15 +46,97 @@ export function baseParams(extra = {}) {
         paper: { default: '#f2e8d2', type: 'color', label: 'Paper' },
         scale: { default: 1, min: 0.25, max: 4, step: 0.05, label: 'Scale' },
         contrast: { default: 1.1, min: 0.3, max: 3, step: 0.05, label: 'Contrast' },
+        black: { default: 0, min: 0, max: 0.9, step: 0.01, label: 'Black point' },
+        white: { default: 1, min: 0.1, max: 1, step: 0.01, label: 'White point' },
         invert: { default: false, label: 'Invert tone' },
         ...extra,
     };
 }
 
-/** Tone after contrast and invert. `v` is luminance 0..1, the result is 1 for light. */
+/** Tone after levels (black and white point), contrast and invert. `v` is luminance 0..1, the result is 1 for light. */
 export function adjust(v, p) {
-    const t = clamp01((v - 0.5) * p.contrast + 0.5);
+    const lo = p.black ?? 0;
+    const hi = p.white ?? 1;
+    const lv = clamp01((v - lo) / (hi - lo || 1e-6));
+    const t = clamp01((lv - 0.5) * p.contrast + 0.5);
     return p.invert ? 1 - t : t;
+}
+
+const toHex = (v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0');
+
+/**
+ * Ink and paper colours taken from the picture inside a region: the average of its darker half, deepened, as ink,
+ * and the average of its lighter half, lifted toward white, as paper. A tile drawn in these still looks like the
+ * area it covers. Returns { ink, paper } as hex strings.
+ */
+export function regionPalette(input, r, { inkDepth = 0.55, paperLift = 0.5 } = {}) {
+    const d = input.data;
+    const step = Math.max(1, Math.round(Math.min(r.w, r.h) / 32));
+    const px = [];
+    let sum = 0;
+    for (let y = Math.max(0, r.y); y < Math.min(input.H, r.y + r.h); y += step) {
+        for (let x = Math.max(0, r.x); x < Math.min(input.W, r.x + r.w); x += step) {
+            const i = (y * input.W + x) * 4;
+            if (d[i + 3] === 0) continue;
+            const l = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+            px.push([d[i], d[i + 1], d[i + 2], l]);
+            sum += l;
+        }
+    }
+    if (!px.length) return { ink: '#1c1814', paper: '#f2e8d2' };
+    const mean = sum / px.length;
+    const dark = [0, 0, 0, 0];
+    const light = [0, 0, 0, 0];
+    for (const q of px) {
+        const t = q[3] < mean ? dark : light;
+        t[0] += q[0];
+        t[1] += q[1];
+        t[2] += q[2];
+        t[3]++;
+    }
+    const avg = (t, fallback) => (t[3] ? [t[0] / t[3], t[1] / t[3], t[2] / t[3]] : fallback);
+    const all = avg([dark[0] + light[0], dark[1] + light[1], dark[2] + light[2], dark[3] + light[3]], [128, 128, 128]);
+    const dk = avg(dark, all);
+    const lt = avg(light, all);
+    const ink = dk.map((v) => v * (1 - inkDepth));
+    const paper = lt.map((v) => v + (255 - v) * paperLift);
+    return { ink: `#${ink.map(toHex).join('')}`, paper: `#${paper.map(toHex).join('')}` };
+}
+
+/**
+ * Black and white points that stretch the tones inside a region to the full range, so a flat sky or a dark
+ * corner still gets texture. Returns { black, white } from the `lowPct` and `highPct` percentiles.
+ */
+export function autoLevels(input, r, lowPct = 0.04, highPct = 0.96, minSpan = 0.18) {
+    const d = input.data;
+    const hist = new Uint32Array(256);
+    let n = 0;
+    const step = Math.max(1, Math.round(Math.min(r.w, r.h) / 48));
+    for (let y = Math.max(0, r.y); y < Math.min(input.H, r.y + r.h); y += step) {
+        for (let x = Math.max(0, r.x); x < Math.min(input.W, r.x + r.w); x += step) {
+            const i = (y * input.W + x) * 4;
+            if (d[i + 3] === 0) continue;
+            hist[Math.round(0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2])]++;
+            n++;
+        }
+    }
+    if (!n) return { black: 0, white: 1 };
+    let acc = 0;
+    let lo = 0;
+    let hi = 255;
+    for (let k = 0; k < 256; k++) {
+        acc += hist[k];
+        if (acc / n < lowPct) lo = k;
+        if (acc / n < highPct) hi = k + 1;
+    }
+    let black = lo / 255;
+    let white = Math.min(1, hi / 255);
+    if (white - black < minSpan) {
+        const mid = (white + black) / 2;
+        black = Math.max(0, mid - minSpan / 2);
+        white = Math.min(1, black + minSpan);
+    }
+    return { black, white };
 }
 
 // ------------------------------------------------------------------ region and source access

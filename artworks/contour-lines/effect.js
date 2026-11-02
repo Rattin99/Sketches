@@ -17,6 +17,7 @@ export default defineEffect({
         lineWidth: { default: 1.5, min: 0.5, max: 5, step: 0.1, label: 'Line width' },
         blur: { default: 2, min: 0, max: 6, step: 1, label: 'Smoothing' },
         edges: { default: true, label: 'Edge strokes' },
+        wash: { default: 0.3, min: 0, max: 0.8, step: 0.01, label: 'Tone wash under the lines' },
     }),
     apply(ctx, state, time, input) {
         const { g, W, params: p, unit } = ctx;
@@ -48,10 +49,13 @@ export default defineEffect({
                 const gx = (tm.t[mid + rt] - tm.t[mid + l]) * 0.5 * p.contrast;
                 const gy = (tm.t[down + tx] - tm.t[up + tx]) * 0.5 * p.contrast;
                 const mag = Math.hypot(gx, gy);
-                const v = adjust(tm.t[mid + tx], p) * L + offset;
+                const tone = adjust(tm.t[mid + tx], p);
+                const v = tone * L + offset;
                 const dist = Math.abs(v - Math.round(v)) / (L * mag + 1e-4); // pixels to the nearest level line
                 let line = 1 - smoothstep(half - 0.5, half + 0.5, dist);
                 if (p.edges) line = Math.max(line, smoothstep(0.045, 0.09, mag));
+                // A light ink wash that follows tone, so the tile still reads as the picture between the lines.
+                line = Math.max(line, (1 - tone) * p.wash);
                 o[oi] = paper[0] + (ink[0] - paper[0]) * line;
                 o[oi + 1] = paper[1] + (ink[1] - paper[1]) * line;
                 o[oi + 2] = paper[2] + (ink[2] - paper[2]) * line;
