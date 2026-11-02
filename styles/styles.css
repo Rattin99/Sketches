@@ -118,6 +118,11 @@ body {
   color: #e0c48a;
 }
 
+.badge-effect {
+  border-color: #8a6fa8;
+  color: #c9aee6;
+}
+
 body.verify-page {
   display: block;
   overflow: auto;

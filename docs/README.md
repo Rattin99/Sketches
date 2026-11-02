@@ -11,8 +11,9 @@ This is the index for everything in the repo. Each entry links to its detailed p
 | [Artworks catalogue](artworks.md) | What each sketch draws, the technique behind it, and the knobs worth tweaking |
 | [Plotter](plotter.md) | The image/video → pen-plotter ink tool: UI, algorithm, every parameter, exports, and the Remotion port |
 | [Clip library](clips.md) | Sketches as frame-addressable video clips: the `clip.js` format, determinism rules, the `?clip` player, `?verify`, and using clips in Remotion |
+| [Effect library](effects.md) | Image effects as frame-addressable looks: the `effect.js` format, `?effect` player, `?verify-effects`, **Patchwork** (random effect tiles over the picture) and the ten effects it draws on |
 | [Sketch index](sketches.md) | Generated list of every sketch with its kind, modes and links. Rebuild with `npm run index` |
-| [Physarum](physarum.md) | The slime-mould piece: the map, guide, agents, paint and colour wave, the CPU and GPU engines, palettes, `look.js`, render cost |
+| [Physarum](physarum.md) | The slime-mould piece: the colony, the simulation, wash and hair ink layers, the composition and colour wave, the CPU and GPU engines, palettes, `look.js`, render cost |
 | [Retro FX](retro-fx.md) | The image/video → animated ASCII / dithering tool: UI, rendering pipeline, motion and seamless loops, every parameter, exports, and the reusable engine |
 
 ## Artwork index
@@ -34,7 +35,9 @@ Open any of these at `http://localhost:5173/?artwork=<id>`.
 | `walker` | Walker | Random-walk vector trails (animated) | 700×700 | `controls`, `color` | [→](artworks.md#walker) |
 | `ngon-demo` | Ngon Demo | Demo of the `ngon()` helper | 400×400 | `controls`, `shapes` | [→](artworks.md#ngon-demo) |
 | `daisys` | Daisys | Wobbly hand-drawn circle | 400×400 | `controls`, `shapes` | [→](artworks.md#daisys) |
-| `physarum` | Physarum (slime-mould in paint) | Simulation: agents grow a vein network across paper in mixing Kubelka-Munk paint, then a colour wave runs back. WebGL2 live, CPU clip | 1920×1080 | `hatching` (seeded RNG), `retro/gl` | [→](physarum.md) |
+| `physarum` | Physarum (slime-mould in paint) | Simulation: unguided agents grow a vein network across paper in coloured ink, then a colour wave runs outward. WebGL2 live, CPU clip | 1920×1080 | `hatching` (seeded RNG), `retro/gl` | [→](physarum.md) |
+| `patchwork` | Patchwork (image → effect tiles) | Effect: a grid of square tiles over the picture, each tile showing it through a different library effect. Swaps and hops in motion. Opens at `?effect=patchwork` | output-sized | `effects/*`, `retro/patterns`, `retro/atlas` | [→](effects.md#patchwork) |
+| `dither-1bit`, `halftone-dots`, `pixel-posterize`, `ink-threshold`, `ascii-glyph`, `contour-lines`, `mesh-grid`, `stipple`, `wave-lines`, `slice-glitch` | Library effects | Single looks applied to an input image. Each opens at `?effect=<id>` | output-sized | `effects/*` | [→](effects.md#catalogue) |
 | `plotter` | Plotter (image/video → ink) | Tool: tonal cross-hatching of uploaded media, PNG/SVG/MP4 export | output-sized | `hatching`, `panel`, `video-export` | [→](plotter.md) |
 | `retro-fx` | Retro FX (image/video → ASCII · dither) | Tool: WebGL2 ASCII / ordered + error-diffusion dithering with time-driven motion and CRT post, PNG/MP4 export | output-sized | `retro/*`, `panel`, `video-export`, `tool-ui.css` | [→](retro-fx.md) |
 

@@ -1,5 +1,6 @@
 import p5 from 'p5';
 import { CLIPS, getClip } from '../clips/index.js';
+import { EFFECTS, getEffect } from '../effects/index.js';
 
 import fire from '../artworks/fire/sketch.js';
 import mouth from '../artworks/mouth/sketch.js';
@@ -70,6 +71,26 @@ function renderGallery(container) {
         }
         container.appendChild(tile);
     }
+    for (const effect of EFFECTS) {
+        const tile = document.createElement('div');
+        tile.className = 'gallery-item';
+
+        const title = document.createElement('a');
+        title.href = `?effect=${effect.id}`;
+        title.className = 'gallery-title';
+        title.textContent = effect.name;
+
+        const badge = document.createElement('span');
+        badge.className = 'badge badge-effect';
+        badge.textContent = 'effect';
+
+        const desc = document.createElement('p');
+        desc.className = 'gallery-desc';
+        desc.textContent = effect.description;
+
+        tile.append(title, badge, desc);
+        container.appendChild(tile);
+    }
 }
 
 function renderArtwork(container, artwork) {
@@ -85,7 +106,11 @@ function renderArtwork(container, artwork) {
 const container = document.getElementById('container');
 const requested = ARTWORKS.find((a) => a.id === query.get('artwork'));
 
-if (query.has('verify')) {
+if (query.has('verify-effects')) {
+    import('../effects/verify.js').then((m) => m.runVerify(container));
+} else if (query.has('effect')) {
+    import('../effects/player.js').then((m) => m.renderPlayer(container, getEffect(query.get('effect'))));
+} else if (query.has('verify')) {
     import('../clips/verify.js').then((m) => m.runVerify(container));
 } else if (query.has('clip')) {
     import('../clips/player.js').then((m) => m.renderPlayer(container, getClip(query.get('clip'))));

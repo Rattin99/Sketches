@@ -25,6 +25,8 @@
         "./clips": "./clips/index.js",
         "./clips/runtime": "./clips/runtime.js",
         "./clips/retro": "./clips/retro.js",
+        "./effects": "./effects/index.js",
+        "./effects/runtime": "./effects/runtime.js",
         "./retro": "./tools/retro/renderer.js",
         "./retro-presets": "./artworks/retro-fx/params.js"
     }

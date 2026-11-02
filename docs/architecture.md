@@ -19,6 +19,8 @@ index.html
         ├─ imports every artworks/<id>/sketch.js
         ├─ ARTWORKS = [{ id, name, sketch }, ...]
         └─ reads the query string
+              ├─ ?verify-effects[=id,id] → effects/verify.js: automated effect checks
+              ├─ ?effect=<id>    → effects/player.js: drop an image, scrub / play / export an effect
               ├─ ?verify[=id,id] → clips/verify.js: automated clip checks
               ├─ ?clip=<id>      → clips/player.js: scrub / play / export a clip
               ├─ ?artwork=<id>   → renderArtwork(): "← All artworks" link
@@ -26,6 +28,7 @@ index.html
               └─ otherwise       → renderGallery(): a tile per entry in CLIPS
 ```
 
+- The gallery also lists every entry of `EFFECTS` (`effects/index.js`) with an `effect` badge, linking to `?effect=<id>`. See [effects.md](effects.md).
 - The gallery reads from `CLIPS` in `clips/index.js`, not from `ARTWORKS`. Each tile shows the name, a kind badge and the description, links to `?artwork=<id>`, and adds an "Open clip" link to `?clip=<id>` for runnable clips. `ARTWORKS` only maps ids to sketches.
 - `#container` is the div in `index.html` that p5 appends its canvas to.
 - `styles/styles.css` gives the dark background, centres the canvas, and styles the gallery tiles.
